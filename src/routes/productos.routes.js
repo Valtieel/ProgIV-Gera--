@@ -8,6 +8,8 @@ import {
     borrarProducto
 } from '../controllers/producto.controller.js';
 import { validarCampos } from '../middlewares/validarCampos.middleware.js';
+import { verificarToken } from '../middlewares/auth.middleware.js';
+import { verificarRolAdmin } from '../middlewares/rol.middleware.js';
 
 const router = Router();
 
@@ -30,17 +32,42 @@ const checksProductoObligatorios = [
     check('proveedor', 'El proveedor es obligatorio').not().isEmpty(),
 ];
 
+// Check de :id para las rutas que lo usan como parámetro (PUT y DELETE).
+// check() sin location explícita revisa body, params y query, así que sirve para params también.
+const checkIdValido = [
+    check('id', 'El ID del producto no es válido').isMongoId(),
+];
+
+// Crear producto: hay que estar logueado (verificarToken) Y ser ADMIN (verificarRolAdmin).
+// El orden importa: primero confirmamos identidad, recién después chequeamos el rol
+// (verificarRolAdmin necesita que req.usuario ya exista, y lo pone verificarToken).
 router.post('/', [
+    verificarToken,
+    verificarRolAdmin,
     ...checksProductoObligatorios,
     ...checksProducto,
     validarCampos,
 ], crearProducto);
+
+// Listar y ver por id quedan públicos a propósito: es el catálogo, cualquiera lo puede consultar.
 router.get('/', obtenerProductos);
 router.get('/:id', obtenerProductoPorId);
+
+// Actualizar: mismo criterio que crear, más la validación del :id.
 router.put('/:id', [
+    verificarToken,
+    verificarRolAdmin,
+    ...checkIdValido,
     ...checksProducto,
     validarCampos,
 ], actualizarProducto);
-router.delete('/:id', borrarProducto);
+
+// Borrar (en realidad es soft-delete, pone estadoActivo en false): mismo criterio.
+router.delete('/:id', [
+    verificarToken,
+    verificarRolAdmin,
+    ...checkIdValido,
+    validarCampos,
+], borrarProducto);
 
 export default router;
